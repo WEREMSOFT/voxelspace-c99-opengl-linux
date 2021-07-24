@@ -14,6 +14,8 @@ typedef struct
     Sprite heightMap;
 
     float cameraSpeed;
+    double angularSpeed;
+    double levelOfDetail;
     int distance;
     float height;
     int horizon;
