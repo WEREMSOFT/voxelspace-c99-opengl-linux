@@ -37,7 +37,11 @@ void imRenderVoxelSpace(Program this, PointI pPoint, double angle);
 Program programCreate()
 {
     Program this = {0};
-    this.graphics = graphicsCreate(640, 480);
+    float aspectRatio = 32.0 / 9.0;
+    int wideSize = 800;
+    this.graphics = graphicsCreate(wideSize, wideSize / aspectRatio);
+
+    glfwSwapInterval(0);
 
     this.sound = soundCreate();
     Soloud_setGlobalVolume(this.sound.soloud, 0);
@@ -47,10 +51,10 @@ Program programCreate()
     this.colorMap = spriteCreate("assets/color.png");
 
     this.height = 50;
-    this.horizon = 120;
+    this.horizon = 50;
     this.scale.y = 300;
-    this.distance = 2000;
-    this.cameraSpeed = 5000.0;
+    this.distance = 50000;
+    this.cameraSpeed = 2500.0;
     return this;
 }
 
@@ -62,9 +66,12 @@ void programMainLoop(Program this)
 
 #define ANGULAR_SPEED 10.0
 
+    double lastUpdate = 0;
+
     while (glfwGetKey(this.graphics.window, GLFW_KEY_ESCAPE) != GLFW_PRESS)
     {
-        deltaTime = getDeltaTime();
+        double deltaTime = glfwGetTime() - lastUpdate;
+        lastUpdate = glfwGetTime();
         if (glfwGetKey(this.graphics.window, GLFW_KEY_LEFT) == GLFW_PRESS)
             cameraPosition.x += this.cameraSpeed * deltaTime;
         else if (glfwGetKey(this.graphics.window, GLFW_KEY_RIGHT) == GLFW_PRESS)
