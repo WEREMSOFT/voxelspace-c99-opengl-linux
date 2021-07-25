@@ -13,6 +13,8 @@ typedef struct
     Sprite colorMap;
     Sprite heightMap;
 
+    double lookingAngle;
+    PointI cameraPosition;
     float cameraSpeed;
     double angularSpeed;
     double levelOfDetail;
@@ -21,6 +23,15 @@ typedef struct
     int horizon;
     PointF scale;
 } Program;
+
+typedef struct
+{
+    pthread_t handler;
+    int startColumn;
+    int endColumn;
+    ImageData imageData;
+    Program program;
+} PthreadInfo;
 
 Program programCreate();
 void programMainLoop(Program this);

@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include "core/input/input.h"
 #include "utils/utils.h"
-#include "sphere/sphere.h"
 #include "vec3/vec3.h"
 
 #define PTHREAD_COUNT 7
@@ -32,17 +31,6 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-
-typedef struct
-{
-    pthread_t handler;
-    Program this;
-    PointI cameraPosition;
-    double lookingAngle;
-    int startColumn;
-    int endColumn;
-    ImageData imageData;
-} PthreadInfo;
 
 void *imRenderVoxelSpaceSlice(void *params);
 
@@ -74,15 +62,10 @@ Program programCreate()
 
 void programMainLoop(Program this)
 {
-    PointI cameraPosition = {0};
-    double deltaTime;
-    double angle = 0.0;
-
     PthreadInfo pthreads[PTHREAD_COUNT] = {0};
 
     for (int i = 0; i < PTHREAD_COUNT; i++)
     {
-        pthreads[i].this = this;
         pthreads[i].imageData.bufferSize = this.graphics.imageData.bufferSize / PTHREAD_COUNT;
         pthreads[i].imageData.data = (Color *)malloc(pthreads[i].imageData.bufferSize);
         pthreads[i].imageData.size.x = this.graphics.imageData.size.x / PTHREAD_COUNT;
@@ -93,8 +76,8 @@ void programMainLoop(Program this)
 
     double lastUpdate = 0;
 
-    PointI lastCameraPosition = cameraPosition;
-    double lastAngle = angle;
+    PointI lastCameraPosition = this.cameraPosition;
+    double lastAngle = this.lookingAngle;
 
     while (glfwGetKey(this.graphics.window, GLFW_KEY_ESCAPE) != GLFW_PRESS)
     {
@@ -112,14 +95,14 @@ void programMainLoop(Program this)
             this.distance -= 100;
 
         if (glfwGetKey(this.graphics.window, GLFW_KEY_LEFT) == GLFW_PRESS)
-            cameraPosition.x += this.cameraSpeed * deltaTime;
+            this.cameraPosition.x += this.cameraSpeed * deltaTime;
         else if (glfwGetKey(this.graphics.window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-            cameraPosition.x -= this.cameraSpeed * deltaTime;
+            this.cameraPosition.x -= this.cameraSpeed * deltaTime;
 
         if (glfwGetKey(this.graphics.window, GLFW_KEY_UP) == GLFW_PRESS)
-            cameraPosition.y -= this.cameraSpeed * deltaTime;
+            this.cameraPosition.y -= this.cameraSpeed * deltaTime;
         else if (glfwGetKey(this.graphics.window, GLFW_KEY_DOWN) == GLFW_PRESS)
-            cameraPosition.y += this.cameraSpeed * deltaTime;
+            this.cameraPosition.y += this.cameraSpeed * deltaTime;
 
         if (glfwGetKey(this.graphics.window, GLFW_KEY_I) == GLFW_PRESS)
             this.height += this.cameraSpeed * deltaTime;
@@ -127,11 +110,11 @@ void programMainLoop(Program this)
             this.height -= this.cameraSpeed * deltaTime;
 
         if (glfwGetKey(this.graphics.window, GLFW_KEY_A) == GLFW_PRESS)
-            angle += this.angularSpeed * deltaTime;
+            this.lookingAngle += this.angularSpeed * deltaTime;
         else if (glfwGetKey(this.graphics.window, GLFW_KEY_D) == GLFW_PRESS)
-            angle -= this.angularSpeed * deltaTime;
+            this.lookingAngle -= this.angularSpeed * deltaTime;
 
-        if (cameraPosition.x != lastCameraPosition.x || cameraPosition.y != lastCameraPosition.y || angle != lastAngle)
+        if (this.cameraPosition.x - lastCameraPosition.x + this.cameraPosition.y - lastCameraPosition.y + this.lookingAngle - lastAngle != 0)
         {
             this.levelOfDetail = 0.05;
         }
@@ -142,9 +125,7 @@ void programMainLoop(Program this)
 
         for (int i = 0; i < PTHREAD_COUNT; i++)
         {
-            pthreads[i].this = this;
-            pthreads[i].cameraPosition = cameraPosition;
-            pthreads[i].lookingAngle = angle;
+            pthreads[i].program = this;
             pthread_create(&pthreads[i].handler, NULL, imRenderVoxelSpaceSlice, &pthreads[i]);
         }
 
@@ -161,8 +142,8 @@ void programMainLoop(Program this)
 
         graphicsSwapBuffers(this.graphics);
         glfwPollEvents();
-        lastCameraPosition = cameraPosition;
-        lastAngle = angle;
+        lastCameraPosition = this.cameraPosition;
+        lastAngle = this.lookingAngle;
     }
 }
 
@@ -185,9 +166,9 @@ void drawVerticalLine(ImageData this, PointI start, Color color, int maxHeight)
 
 void *imRenderVoxelSpaceSlice(void *params)
 {
-    PthreadInfo *info = (PthreadInfo *)params;
+    PthreadInfo this = *(PthreadInfo *)params;
 
-    double angle = info->lookingAngle;
+    double angle = this.program.lookingAngle;
 
     PointF pLeft = {0};
     PointF pRight = {0};
@@ -198,52 +179,52 @@ void *imRenderVoxelSpaceSlice(void *params)
 
     double dz = 1.0;
 
-    int maxHeight[info->imageData.size.x];
+    int maxHeight[this.imageData.size.x];
 
-    for (int i = 0; i < info->imageData.size.x; i++)
+    for (int i = 0; i < this.imageData.size.x; i++)
     {
-        maxHeight[i] = info->this.graphics.imageData.size.y - 1;
+        maxHeight[i] = this.program.graphics.imageData.size.y - 1;
     }
 
     double z = 1.0;
-    imClear(info->imageData);
-    while (z < info->this.distance)
+    imClear(this.imageData);
+    while (z < this.program.distance)
     {
 
-        pLeft = (PointF){(-cosphi - sinphi) * z + info->cameraPosition.x, (sinphi - cosphi) * z + info->cameraPosition.y};
-        pRight = (PointF){(cosphi - sinphi) * z + info->cameraPosition.x, (-sinphi - cosphi) * z + info->cameraPosition.y};
+        pLeft = (PointF){(-cosphi - sinphi) * z + this.program.cameraPosition.x, (sinphi - cosphi) * z + this.program.cameraPosition.y};
+        pRight = (PointF){(cosphi - sinphi) * z + this.program.cameraPosition.x, (-sinphi - cosphi) * z + this.program.cameraPosition.y};
 
-        double dx = (pRight.x - pLeft.x) / info->this.graphics.imageData.size.x + (info->startColumn / info->this.graphics.imageData.size.x);
-        double dy = (pRight.y - pLeft.y) / info->this.graphics.imageData.size.y;
+        double dx = (pRight.x - pLeft.x) / this.program.graphics.imageData.size.x + (this.startColumn / this.program.graphics.imageData.size.x);
+        double dy = (pRight.y - pLeft.y) / this.program.graphics.imageData.size.y;
 
-        pLeft.x += dx * info->startColumn;
-        pLeft.y += dy * info->startColumn;
+        pLeft.x += dx * this.startColumn;
+        pLeft.y += dy * this.startColumn;
 
-        for (int i = 0; i < info->imageData.size.x; i++)
+        for (int i = 0; i < this.imageData.size.x; i++)
         {
             PointU mappedPoint = pointFToPointU(pLeft);
 
-            unsigned int position = (mappedPoint.x + mappedPoint.y * info->this.heightMap.imageData.size.x);
+            unsigned int position = (mappedPoint.x + mappedPoint.y * this.program.heightMap.imageData.size.x);
             position %= MODULE;
-            Color colorMapColor = info->this.colorMap.imageData.data[position];
+            Color colorMapColor = this.program.colorMap.imageData.data[position];
 
-            double colorRatio = (info->this.distance - z) / info->this.distance;
+            double colorRatio = (this.program.distance - z) / this.program.distance;
 
             colorMapColor.r *= colorRatio;
             colorMapColor.g *= colorRatio;
             colorMapColor.b *= colorRatio;
 
-            Color heightMapColor = info->this.heightMap.imageData.data[position];
-            int heightOnScreen = (info->this.height - heightMapColor.r) / (float)z * info->this.scale.y + info->this.horizon;
+            Color heightMapColor = this.program.heightMap.imageData.data[position];
+            int heightOnScreen = (this.program.height - heightMapColor.r) / (float)z * this.program.scale.y + this.program.horizon;
 
-            heightOnScreen = MIN(MAX(heightOnScreen, 0), info->imageData.size.y);
-            drawVerticalLine(info->imageData, (PointI){i, heightOnScreen}, colorMapColor, maxHeight[i]);
+            heightOnScreen = MIN(MAX(heightOnScreen, 0), this.imageData.size.y);
+            drawVerticalLine(this.imageData, (PointI){i, heightOnScreen}, colorMapColor, maxHeight[i]);
             pLeft.x += dx;
             pLeft.y += dy;
             maxHeight[i] = MIN(heightOnScreen, maxHeight[i]);
         }
         z += dz;
-        dz += info->this.levelOfDetail;
+        dz += this.program.levelOfDetail;
     }
 
     return NULL;
