@@ -7,7 +7,8 @@ Sprite spriteCreate(char *file)
     Sprite this = {0};
     int nrChannels;
     this.imageData.data = (Color *)stbi_load(file, &this.imageData.size.x, &this.imageData.size.y, &nrChannels, 0);
-    this.imageData.bufferSize = this.imageData.size.x * this.imageData.size.y * sizeof(Color);
+    this.imageData.elementCount = this.imageData.size.x * this.imageData.size.y;
+    this.imageData.bufferSize = this.imageData.elementCount * sizeof(char) * nrChannels;
     if (this.imageData.data == NULL)
     {
         fprintf(stderr, "Error loading file %s. Aborting.\n", file);

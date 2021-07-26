@@ -6,12 +6,23 @@
 #include "camera/camera.h"
 #include "core/array/array.h"
 
+enum EnumMapTYpe
+{
+    MAP_SNOW_WATERY,
+    MAP_FOREST_WATERY,
+    MAP_MOUNTAINS_DESERT,
+    MAP_MOUNTAINS,
+    MAP_JUNGLE,
+    MAP_DESERT,
+    MAP_COUNT
+};
+
 typedef struct
 {
     Graphics graphics;
     Sound sound;
-    Sprite colorMap;
-    Sprite heightMap;
+    Sprite colorMaps[MAP_COUNT];
+    Sprite heightMaps[MAP_COUNT];
 
     double lookingAngle;
     PointI cameraPosition;
@@ -22,6 +33,9 @@ typedef struct
     float height;
     int horizon;
     PointF scale;
+    unsigned int mapIndex;
+    char colorMapNames[MAP_COUNT][50];
+    char heightMapNames[MAP_COUNT][50];
 } Program;
 
 typedef struct

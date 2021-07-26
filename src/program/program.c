@@ -37,6 +37,25 @@ void *imRenderVoxelSpaceSlice(void *params);
 Program programCreate()
 {
     Program this = {0};
+
+    strcpy(this.heightMapNames[MAP_SNOW_WATERY], "assets/snow-watery-height.png");
+    strcpy(this.colorMapNames[MAP_SNOW_WATERY], "assets/snow-watery-color.png");
+
+    strcpy(this.heightMapNames[MAP_FOREST_WATERY], "assets/forest-watery-height.png");
+    strcpy(this.colorMapNames[MAP_FOREST_WATERY], "assets/forest-watery-color.png");
+
+    strcpy(this.heightMapNames[MAP_JUNGLE], "assets/height.png");
+    strcpy(this.colorMapNames[MAP_JUNGLE], "assets/color.png");
+
+    strcpy(this.heightMapNames[MAP_MOUNTAINS_DESERT], "assets/mountains-desert-height.png");
+    strcpy(this.colorMapNames[MAP_MOUNTAINS_DESERT], "assets/mountains-desert-color.png");
+
+    strcpy(this.heightMapNames[MAP_MOUNTAINS], "assets/mountains-height.png");
+    strcpy(this.colorMapNames[MAP_MOUNTAINS], "assets/mountains-color.png");
+
+    strcpy(this.heightMapNames[MAP_DESERT], "assets/desert-height.png");
+    strcpy(this.colorMapNames[MAP_DESERT], "assets/desert-color.png");
+
     float aspectRatio = 16.0 / 9.0;
     int wideSize = 1024;
     this.graphics = graphicsCreate(wideSize, wideSize / aspectRatio);
@@ -46,9 +65,11 @@ Program programCreate()
     this.sound = soundCreate();
     Soloud_setGlobalVolume(this.sound.soloud, 0);
 
-    this.heightMap = spriteCreate("assets/height.png");
-    this.heightMap.position.x = this.heightMap.imageData.size.x;
-    this.colorMap = spriteCreate("assets/color.png");
+    for (int i = 0; i < MAP_COUNT; i++)
+    {
+        this.heightMaps[i] = spriteCreate(this.heightMapNames[i]);
+        this.colorMaps[i] = spriteCreate(this.colorMapNames[i]);
+    }
 
     this.height = 200;
     this.horizon = 50;
@@ -114,6 +135,18 @@ void programMainLoop(Program this)
         else if (glfwGetKey(this.graphics.window, GLFW_KEY_D) == GLFW_PRESS)
             this.lookingAngle -= this.angularSpeed * deltaTime;
 
+        if (isKeyJustPressed(this.graphics.window, GLFW_KEY_K))
+        {
+            this.mapIndex++;
+            this.mapIndex %= MAP_COUNT;
+        }
+
+        if (isKeyJustPressed(this.graphics.window, GLFW_KEY_L))
+        {
+            this.mapIndex--;
+            this.mapIndex %= MAP_COUNT;
+        }
+
         if (this.cameraPosition.x - lastCameraPosition.x + this.cameraPosition.y - lastCameraPosition.y + this.lookingAngle - lastAngle != 0)
         {
             this.levelOfDetail = 0.05;
@@ -149,8 +182,11 @@ void programMainLoop(Program this)
 
 void programDestroy(Program this)
 {
-    spriteDestroy(this.heightMap);
-    spriteDestroy(this.colorMap);
+    for (int i = 0; i < MAP_COUNT; i++)
+    {
+        spriteDestroy(this.heightMaps[i]);
+        spriteDestroy(this.colorMaps[i]);
+    }
     graphicsDestroy(this.graphics);
     soundDestroy(this.sound);
 }
@@ -204,9 +240,10 @@ void *imRenderVoxelSpaceSlice(void *params)
         {
             PointU mappedPoint = pointFToPointU(pLeft);
 
-            unsigned int position = (mappedPoint.x + mappedPoint.y * this.program.heightMap.imageData.size.x);
+            unsigned int position = (mappedPoint.x + mappedPoint.y * this.program.colorMaps[this.program.mapIndex].imageData.size.x);
+            // position %= this.program.colorMaps[this.program.mapIndex].imageData.bufferSize;
             position %= MODULE;
-            Color colorMapColor = this.program.colorMap.imageData.data[position];
+            Color colorMapColor = this.program.colorMaps[this.program.mapIndex].imageData.data[position];
 
             double colorRatio = (this.program.distance - z) / this.program.distance;
 
@@ -214,8 +251,10 @@ void *imRenderVoxelSpaceSlice(void *params)
             colorMapColor.g *= colorRatio;
             colorMapColor.b *= colorRatio;
 
-            Color heightMapColor = this.program.heightMap.imageData.data[position];
-            int heightOnScreen = (this.program.height - heightMapColor.r) / (float)z * this.program.scale.y + this.program.horizon;
+            position = (mappedPoint.x + mappedPoint.y * this.program.heightMaps[this.program.mapIndex].imageData.size.x);
+            position %= this.program.heightMaps[this.program.mapIndex].imageData.bufferSize;
+            char heightMapColor = ((char *)this.program.heightMaps[this.program.mapIndex].imageData.data)[position];
+            int heightOnScreen = (this.program.height - heightMapColor) / (float)z * this.program.scale.y + this.program.horizon;
 
             heightOnScreen = MIN(MAX(heightOnScreen, 0), this.imageData.size.y);
             drawVerticalLine(this.imageData, (PointI){i, heightOnScreen}, colorMapColor, maxHeight[i]);

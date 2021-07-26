@@ -28,6 +28,7 @@ typedef struct
 {
     PointI size;
     int bufferSize;
+    int elementCount;
     Color *data;
 } ImageData;
 
