@@ -56,8 +56,8 @@ Program programCreate()
     strcpy(this.heightMapNames[MAP_DESERT], "assets/desert-height.png");
     strcpy(this.colorMapNames[MAP_DESERT], "assets/desert-color.png");
 
-    float aspectRatio = 16.0 / 9.0;
-    int wideSize = 1024;
+    float aspectRatio = 4.0 / 3.0;
+    int wideSize = 800;
     this.graphics = graphicsCreate(wideSize, wideSize / aspectRatio);
 
     glfwSwapInterval(0);
@@ -74,10 +74,10 @@ Program programCreate()
     this.height = 200;
     this.horizon = 50;
     this.scale.y = 400;
-    this.distance = 10000;
-    this.cameraSpeed = 500.0;
-    this.angularSpeed = 1.5;
-    this.levelOfDetail = 0.001;
+    this.distance = 4000;
+    this.cameraSpeed = 250.0;
+    this.angularSpeed = 0.5;
+    this.levelOfDetail = 0.01;
     return this;
 }
 
@@ -96,44 +96,70 @@ void programMainLoop(Program this)
     }
 
     double lastUpdate = 0;
+    bool demoMode = true;
 
     PointI lastCameraPosition = this.cameraPosition;
     double lastAngle = this.lookingAngle;
+    double stopwatchStart = glfwGetTime();
 
     while (glfwGetKey(this.graphics.window, GLFW_KEY_ESCAPE) != GLFW_PRESS)
     {
         double deltaTime = glfwGetTime() - lastUpdate;
         lastUpdate = glfwGetTime();
 
-        if (glfwGetKey(this.graphics.window, GLFW_KEY_F1) == GLFW_PRESS)
-            this.scale.x = this.scale.y += 10;
-        else if (glfwGetKey(this.graphics.window, GLFW_KEY_F2) == GLFW_PRESS)
-            this.scale.x = this.scale.y -= 10;
-
-        if (glfwGetKey(this.graphics.window, GLFW_KEY_F3) == GLFW_PRESS)
-            this.distance += 100;
-        else if (glfwGetKey(this.graphics.window, GLFW_KEY_F4) == GLFW_PRESS)
-            this.distance -= 100;
-
-        if (glfwGetKey(this.graphics.window, GLFW_KEY_LEFT) == GLFW_PRESS)
-            this.cameraPosition.x += this.cameraSpeed * deltaTime;
-        else if (glfwGetKey(this.graphics.window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-            this.cameraPosition.x -= this.cameraSpeed * deltaTime;
-
-        if (glfwGetKey(this.graphics.window, GLFW_KEY_UP) == GLFW_PRESS)
-            this.cameraPosition.y -= this.cameraSpeed * deltaTime;
-        else if (glfwGetKey(this.graphics.window, GLFW_KEY_DOWN) == GLFW_PRESS)
+        if (demoMode)
+        {
             this.cameraPosition.y += this.cameraSpeed * deltaTime;
-
-        if (glfwGetKey(this.graphics.window, GLFW_KEY_I) == GLFW_PRESS)
-            this.height += this.cameraSpeed * deltaTime;
-        else if (glfwGetKey(this.graphics.window, GLFW_KEY_O) == GLFW_PRESS)
-            this.height -= this.cameraSpeed * deltaTime;
-
-        if (glfwGetKey(this.graphics.window, GLFW_KEY_A) == GLFW_PRESS)
-            this.lookingAngle += this.angularSpeed * deltaTime;
-        else if (glfwGetKey(this.graphics.window, GLFW_KEY_D) == GLFW_PRESS)
+            this.cameraPosition.x += this.cameraSpeed * deltaTime;
             this.lookingAngle -= this.angularSpeed * deltaTime;
+            if (glfwGetTime() - stopwatchStart > 3.0)
+            {
+                this.mapIndex += 1;
+                this.mapIndex %= MAP_COUNT;
+                stopwatchStart = glfwGetTime();
+            }
+        }
+        else
+        {
+            if (glfwGetKey(this.graphics.window, GLFW_KEY_F1) == GLFW_PRESS)
+                this.scale.x = this.scale.y += 10;
+            else if (glfwGetKey(this.graphics.window, GLFW_KEY_F2) == GLFW_PRESS)
+                this.scale.x = this.scale.y -= 10;
+
+            if (glfwGetKey(this.graphics.window, GLFW_KEY_F3) == GLFW_PRESS)
+                this.distance += 100;
+            else if (glfwGetKey(this.graphics.window, GLFW_KEY_F4) == GLFW_PRESS)
+                this.distance -= 100;
+
+            if (glfwGetKey(this.graphics.window, GLFW_KEY_LEFT) == GLFW_PRESS)
+                this.cameraPosition.x += this.cameraSpeed * deltaTime;
+            else if (glfwGetKey(this.graphics.window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+                this.cameraPosition.x -= this.cameraSpeed * deltaTime;
+
+            if (glfwGetKey(this.graphics.window, GLFW_KEY_UP) == GLFW_PRESS)
+                this.cameraPosition.y -= this.cameraSpeed * deltaTime;
+            else if (glfwGetKey(this.graphics.window, GLFW_KEY_DOWN) == GLFW_PRESS)
+                this.cameraPosition.y += this.cameraSpeed * deltaTime;
+
+            if (glfwGetKey(this.graphics.window, GLFW_KEY_I) == GLFW_PRESS)
+                this.height += this.cameraSpeed * deltaTime;
+            else if (glfwGetKey(this.graphics.window, GLFW_KEY_O) == GLFW_PRESS)
+                this.height -= this.cameraSpeed * deltaTime;
+
+            if (glfwGetKey(this.graphics.window, GLFW_KEY_A) == GLFW_PRESS)
+                this.lookingAngle += this.angularSpeed * deltaTime;
+            else if (glfwGetKey(this.graphics.window, GLFW_KEY_D) == GLFW_PRESS)
+                this.lookingAngle -= this.angularSpeed * deltaTime;
+
+            if (this.cameraPosition.x - lastCameraPosition.x + this.cameraPosition.y - lastCameraPosition.y + this.lookingAngle - lastAngle != 0)
+            {
+                this.levelOfDetail = 0.05;
+            }
+            else
+            {
+                this.levelOfDetail = 0.01;
+            }
+        }
 
         if (isKeyJustPressed(this.graphics.window, GLFW_KEY_K))
         {
@@ -145,15 +171,6 @@ void programMainLoop(Program this)
         {
             this.mapIndex--;
             this.mapIndex %= MAP_COUNT;
-        }
-
-        if (this.cameraPosition.x - lastCameraPosition.x + this.cameraPosition.y - lastCameraPosition.y + this.lookingAngle - lastAngle != 0)
-        {
-            this.levelOfDetail = 0.05;
-        }
-        else
-        {
-            this.levelOfDetail = 0.01;
         }
 
         for (int i = 0; i < PTHREAD_COUNT; i++)
