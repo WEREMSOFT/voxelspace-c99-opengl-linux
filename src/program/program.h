@@ -6,7 +6,7 @@
 #include "camera/camera.h"
 #include "core/array/array.h"
 
-enum EnumMapTYpe
+enum EnumMapType
 {
     MAP_SNOW_WATERY,
     MAP_FOREST_WATERY,
