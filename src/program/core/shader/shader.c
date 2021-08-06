@@ -28,6 +28,7 @@ static int shaderCreateFromFile(const char *fileName, unsigned int *vertexShader
     fseek(fp, 0, SEEK_SET);
 
     shaderCode = malloc(fileSize + 1 * sizeof(char));
+    shaderCode[fileSize] = 0;
 
     if (shaderCode == NULL)
     {
