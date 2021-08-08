@@ -62,9 +62,6 @@ Program programCreate()
 
     glfwSwapInterval(0);
 
-    this.sound = soundCreate();
-    Soloud_setGlobalVolume(this.sound.soloud, 0);
-
     for (int i = 0; i < MAP_COUNT; i++)
     {
         this.heightMaps[i] = spriteCreate(this.heightMapNames[i]);
@@ -205,7 +202,6 @@ void programDestroy(Program this)
         spriteDestroy(this.colorMaps[i]);
     }
     graphicsDestroy(this.graphics);
-    soundDestroy(this.sound);
 }
 
 void drawVerticalLine(ImageData this, PointI start, Color color, int maxHeight)

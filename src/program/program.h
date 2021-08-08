@@ -2,7 +2,6 @@
 #define __PROGRAM_H__
 #include "core/graphics/graphics.h"
 #include "core/sprite/sprite.h"
-#include "sound/sound.h"
 #include "camera/camera.h"
 #include "core/array/array.h"
 
@@ -20,7 +19,6 @@ enum EnumMapTYpe
 typedef struct
 {
     Graphics graphics;
-    Sound sound;
     Sprite colorMaps[MAP_COUNT];
     Sprite heightMaps[MAP_COUNT];
 
