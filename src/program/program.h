@@ -9,9 +9,9 @@ enum EnumMapTYpe
 {
     MAP_SNOW_WATERY,
     MAP_FOREST_WATERY,
+    MAP_JUNGLE,
     MAP_MOUNTAINS_DESERT,
     MAP_MOUNTAINS,
-    MAP_JUNGLE,
     MAP_DESERT,
     MAP_COUNT
 };
@@ -32,8 +32,6 @@ typedef struct
     int horizon;
     PointF scale;
     unsigned int mapIndex;
-    char colorMapNames[MAP_COUNT][50];
-    char heightMapNames[MAP_COUNT][50];
 } Program;
 
 typedef struct

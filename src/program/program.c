@@ -32,29 +32,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include "core/queue/queue.h"
+
 void *imRenderVoxelSpaceSlice(void *params);
 
 Program programCreate()
 {
     Program this = {0};
-
-    strcpy(this.heightMapNames[MAP_SNOW_WATERY], "assets/snow-watery-height.png");
-    strcpy(this.colorMapNames[MAP_SNOW_WATERY], "assets/snow-watery-color.png");
-
-    strcpy(this.heightMapNames[MAP_FOREST_WATERY], "assets/forest-watery-height.png");
-    strcpy(this.colorMapNames[MAP_FOREST_WATERY], "assets/forest-watery-color.png");
-
-    strcpy(this.heightMapNames[MAP_JUNGLE], "assets/height.png");
-    strcpy(this.colorMapNames[MAP_JUNGLE], "assets/color.png");
-
-    strcpy(this.heightMapNames[MAP_MOUNTAINS_DESERT], "assets/mountains-desert-height.png");
-    strcpy(this.colorMapNames[MAP_MOUNTAINS_DESERT], "assets/mountains-desert-color.png");
-
-    strcpy(this.heightMapNames[MAP_MOUNTAINS], "assets/mountains-height.png");
-    strcpy(this.colorMapNames[MAP_MOUNTAINS], "assets/mountains-color.png");
-
-    strcpy(this.heightMapNames[MAP_DESERT], "assets/desert-height.png");
-    strcpy(this.colorMapNames[MAP_DESERT], "assets/desert-color.png");
 
     float aspectRatio = 4.0 / 3.0;
     int wideSize = 800;
@@ -62,10 +46,26 @@ Program programCreate()
 
     glfwSwapInterval(0);
 
+    const char *heightMapNames[] = {
+        "assets/snow-watery-height.png",
+        "assets/forest-watery-height.png",
+        "assets/height.png",
+        "assets/mountains-desert-height.png",
+        "assets/mountains-height.png",
+        "assets/desert-height.png"};
+
+    const char *colorMapNames[] = {
+        "assets/snow-watery-color.png",
+        "assets/forest-watery-color.png",
+        "assets/color.png",
+        "assets/mountains-desert-color.png",
+        "assets/mountains-color.png",
+        "assets/desert-color.png"};
+
     for (int i = 0; i < MAP_COUNT; i++)
     {
-        this.heightMaps[i] = spriteCreate(this.heightMapNames[i]);
-        this.colorMaps[i] = spriteCreate(this.colorMapNames[i]);
+        this.heightMaps[i] = spriteCreate(heightMapNames[i]);
+        this.colorMaps[i] = spriteCreate(colorMapNames[i]);
     }
 
     this.height = 200;
@@ -254,7 +254,7 @@ void *imRenderVoxelSpaceSlice(void *params)
             PointU mappedPoint = pointFToPointU(pLeft);
 
             unsigned int position = (mappedPoint.x + mappedPoint.y * this.program.colorMaps[this.program.mapIndex].imageData.size.x);
-            // position %= this.program.colorMaps[this.program.mapIndex].imageData.bufferSize;
+
             position %= MODULE;
             Color colorMapColor = this.program.colorMaps[this.program.mapIndex].imageData.data[position];
 
