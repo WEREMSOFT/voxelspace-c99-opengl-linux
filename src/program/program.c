@@ -12,7 +12,7 @@
 #include "utils/utils.h"
 #include "vec3/vec3.h"
 
-#define PTHREAD_COUNT 7
+#define PTHREAD_COUNT 8
 #define MODULE 1048576
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
@@ -34,7 +34,13 @@
 
 #include "core/queue/queue.h"
 
-void *imRenderVoxelSpaceSlice(void *params);
+pthread_mutex_t mutexMain = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t referenceCounterLock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t condVar = PTHREAD_COND_INITIALIZER;
+int refCounter = 0;
+Queue taskQ = {0};
+
+void *imRenderVoxelSpaceSlice();
 
 Program programCreate()
 {
@@ -46,7 +52,7 @@ Program programCreate()
 
     glfwSwapInterval(0);
 
-    const char *heightMapNames[] = {
+    char *heightMapNames[] = {
         "assets/snow-watery-height.png",
         "assets/forest-watery-height.png",
         "assets/height.png",
@@ -54,7 +60,7 @@ Program programCreate()
         "assets/mountains-height.png",
         "assets/desert-height.png"};
 
-    const char *colorMapNames[] = {
+    char *colorMapNames[] = {
         "assets/snow-watery-color.png",
         "assets/forest-watery-color.png",
         "assets/color.png",
@@ -81,6 +87,12 @@ Program programCreate()
 void programMainLoop(Program this)
 {
     PthreadInfo pthreads[PTHREAD_COUNT] = {0};
+
+    for (int i = 0; i < PTHREAD_COUNT; i++)
+    {
+        pthreads[i].program = this;
+        pthread_create(&pthreads[i].handler, NULL, imRenderVoxelSpaceSlice, NULL);
+    }
 
     for (int i = 0; i < PTHREAD_COUNT; i++)
     {
@@ -170,23 +182,34 @@ void programMainLoop(Program this)
             this.mapIndex %= MAP_COUNT;
         }
 
+        pthread_mutex_lock(&mutexMain);
         for (int i = 0; i < PTHREAD_COUNT; i++)
         {
             pthreads[i].program = this;
-            pthread_create(&pthreads[i].handler, NULL, imRenderVoxelSpaceSlice, &pthreads[i]);
+            queueEnqueue(&taskQ, &pthreads[i]);
+            pthread_cond_signal(&condVar);
         }
+        pthread_mutex_unlock(&mutexMain);
 
         Sprite tempSprite = {0};
+
+        int tempRefCounter = PTHREAD_COUNT;
+        while (tempRefCounter > 0)
+        {
+            pthread_mutex_lock(&referenceCounterLock);
+            tempRefCounter = refCounter;
+            pthread_mutex_unlock(&referenceCounterLock);
+        };
+
+        refCounter = PTHREAD_COUNT;
         for (int i = 0; i < PTHREAD_COUNT; i++)
         {
-            pthread_join(pthreads[i].handler, NULL);
             tempSprite.position.x = pthreads[i].startColumn;
             tempSprite.imageData = pthreads[i].imageData;
             spriteDraw(tempSprite, this.graphics.imageData);
         }
 
         printFPS(this.graphics, getDeltaTime());
-
         graphicsSwapBuffers(this.graphics);
         glfwPollEvents();
         lastCameraPosition = this.cameraPosition;
@@ -196,6 +219,8 @@ void programMainLoop(Program this)
 
 void programDestroy(Program this)
 {
+    pthread_mutex_destroy(&mutexMain);
+    pthread_mutex_destroy(&referenceCounterLock);
     for (int i = 0; i < MAP_COUNT; i++)
     {
         spriteDestroy(this.heightMaps[i]);
@@ -213,71 +238,85 @@ void drawVerticalLine(ImageData this, PointI start, Color color, int maxHeight)
     }
 }
 
-void *imRenderVoxelSpaceSlice(void *params)
+void *imRenderVoxelSpaceSlice()
 {
-    PthreadInfo this = *(PthreadInfo *)params;
+    PthreadInfo *this = NULL;
 
-    double angle = this.program.lookingAngle;
-
-    PointF pLeft = {0};
-    PointF pRight = {0};
-
-    // precalculate viewing angle parameters
-    double sinphi = sinf(angle);
-    double cosphi = cosf(angle);
-
-    double dz = 1.0;
-
-    int maxHeight[this.imageData.size.x];
-
-    for (int i = 0; i < this.imageData.size.x; i++)
+    while (true)
     {
-        maxHeight[i] = this.program.graphics.imageData.size.y - 1;
-    }
+        pthread_mutex_lock(&mutexMain);
+        pthread_cond_wait(&condVar, &mutexMain);
+        this = (PthreadInfo *)queueDequeue(&taskQ);
+        pthread_mutex_unlock(&mutexMain);
 
-    double z = 1.0;
-    imClear(this.imageData);
-    while (z < this.program.distance)
-    {
-
-        pLeft = (PointF){(-cosphi - sinphi) * z + this.program.cameraPosition.x, (sinphi - cosphi) * z + this.program.cameraPosition.y};
-        pRight = (PointF){(cosphi - sinphi) * z + this.program.cameraPosition.x, (-sinphi - cosphi) * z + this.program.cameraPosition.y};
-
-        double dx = (pRight.x - pLeft.x) / this.program.graphics.imageData.size.x + (this.startColumn / this.program.graphics.imageData.size.x);
-        double dy = (pRight.y - pLeft.y) / this.program.graphics.imageData.size.y;
-
-        pLeft.x += dx * this.startColumn;
-        pLeft.y += dy * this.startColumn;
-
-        for (int i = 0; i < this.imageData.size.x; i++)
+        if (this != NULL)
         {
-            PointU mappedPoint = pointFToPointU(pLeft);
+            PthreadInfo that = *this;
+            double angle = that.program.lookingAngle;
 
-            unsigned int position = (mappedPoint.x + mappedPoint.y * this.program.colorMaps[this.program.mapIndex].imageData.size.x);
+            PointF pLeft = {0};
+            PointF pRight = {0};
 
-            position %= MODULE;
-            Color colorMapColor = this.program.colorMaps[this.program.mapIndex].imageData.data[position];
+            // precalculate viewing angle parameters
+            double sinphi = sinf(angle);
+            double cosphi = cosf(angle);
 
-            double colorRatio = (this.program.distance - z) / this.program.distance;
+            double dz = 1.0;
 
-            colorMapColor.r *= colorRatio;
-            colorMapColor.g *= colorRatio;
-            colorMapColor.b *= colorRatio;
+            int maxHeight[that.imageData.size.x];
 
-            position = (mappedPoint.x + mappedPoint.y * this.program.heightMaps[this.program.mapIndex].imageData.size.x);
-            position %= this.program.heightMaps[this.program.mapIndex].imageData.bufferSize;
-            char heightMapColor = ((char *)this.program.heightMaps[this.program.mapIndex].imageData.data)[position];
-            int heightOnScreen = (this.program.height - heightMapColor) / (float)z * this.program.scale.y + this.program.horizon;
+            for (int i = 0; i < that.imageData.size.x; i++)
+            {
+                maxHeight[i] = that.program.graphics.imageData.size.y - 1;
+            }
 
-            heightOnScreen = MIN(MAX(heightOnScreen, 0), this.imageData.size.y);
-            drawVerticalLine(this.imageData, (PointI){i, heightOnScreen}, colorMapColor, maxHeight[i]);
-            pLeft.x += dx;
-            pLeft.y += dy;
-            maxHeight[i] = MIN(heightOnScreen, maxHeight[i]);
+            double z = 1.0;
+            imClear(that.imageData);
+            while (z < that.program.distance)
+            {
+
+                pLeft = (PointF){(-cosphi - sinphi) * z + that.program.cameraPosition.x, (sinphi - cosphi) * z + that.program.cameraPosition.y};
+                pRight = (PointF){(cosphi - sinphi) * z + that.program.cameraPosition.x, (-sinphi - cosphi) * z + that.program.cameraPosition.y};
+
+                double dx = (pRight.x - pLeft.x) / that.program.graphics.imageData.size.x + (that.startColumn / that.program.graphics.imageData.size.x);
+                double dy = (pRight.y - pLeft.y) / that.program.graphics.imageData.size.y;
+
+                pLeft.x += dx * that.startColumn;
+                pLeft.y += dy * that.startColumn;
+
+                for (int i = 0; i < that.imageData.size.x; i++)
+                {
+                    PointU mappedPoint = pointFToPointU(pLeft);
+
+                    unsigned int position = (mappedPoint.x + mappedPoint.y * that.program.colorMaps[that.program.mapIndex].imageData.size.x);
+
+                    position %= MODULE;
+                    Color colorMapColor = that.program.colorMaps[that.program.mapIndex].imageData.data[position];
+
+                    double colorRatio = (that.program.distance - z) / that.program.distance;
+
+                    colorMapColor.r *= colorRatio;
+                    colorMapColor.g *= colorRatio;
+                    colorMapColor.b *= colorRatio;
+
+                    position = (mappedPoint.x + mappedPoint.y * that.program.heightMaps[that.program.mapIndex].imageData.size.x);
+                    position %= that.program.heightMaps[that.program.mapIndex].imageData.bufferSize;
+                    char heightMapColor = ((char *)that.program.heightMaps[that.program.mapIndex].imageData.data)[position];
+                    int heightOnScreen = (that.program.height - heightMapColor) / (float)z * that.program.scale.y + that.program.horizon;
+
+                    heightOnScreen = MIN(MAX(heightOnScreen, 0), that.imageData.size.y);
+                    drawVerticalLine(that.imageData, (PointI){i, heightOnScreen}, colorMapColor, maxHeight[i]);
+                    pLeft.x += dx;
+                    pLeft.y += dy;
+                    maxHeight[i] = MIN(heightOnScreen, maxHeight[i]);
+                }
+                z += dz;
+                dz += that.program.levelOfDetail;
+            }
+            pthread_mutex_lock(&referenceCounterLock);
+            refCounter--;
+            pthread_mutex_unlock(&referenceCounterLock);
         }
-        z += dz;
-        dz += this.program.levelOfDetail;
     }
-
     return NULL;
 }

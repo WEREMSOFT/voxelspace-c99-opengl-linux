@@ -1,4 +1,5 @@
 #include "queue.h"
+#include <pthread.h>
 
 bool queueIsEmpty(Queue this)
 {
@@ -9,24 +10,25 @@ Node *nodeCreate(void *data)
 {
     Node *this = malloc(sizeof(Node));
     this->data = data;
+    this->next = this;
     return this;
 }
 
-Queue queueEnqueue(Queue this, void *data)
+void queueEnqueue(Queue *this, void *data)
 {
+
     Node *node = nodeCreate(data);
-    if (this.head == NULL)
+    if (this->head == NULL)
     {
-        this.head = node;
-        this.tail = this.head;
-        this.head->next = this.tail;
+        this->head = node;
+        this->tail = this->head;
+        this->head->next = this->tail;
     }
     else
     {
-        this.tail->next = node;
-        this.tail = node;
+        this->tail->next = node;
+        this->tail = node;
     }
-    return this;
 }
 
 void *queueDequeue(Queue *this)
@@ -34,10 +36,20 @@ void *queueDequeue(Queue *this)
     if (this->head == NULL)
         return NULL;
 
-    Node *headNode = this->head;
-    void *data = headNode->data;
+    void *data;
 
-    this->head = this->head->next;
+    Node *headNode = this->head;
+    data = headNode->data;
+
+    if (this->head == this->head->next)
+    {
+        this->head = NULL;
+        this->tail = NULL;
+    }
+    else
+    {
+        this->head = this->head->next;
+    }
 
     if (headNode)
     {
@@ -49,7 +61,6 @@ void *queueDequeue(Queue *this)
 
 void queueDestroy(Queue *this)
 {
-    Node *node;
     while (this->head)
     {
         Node *oldHead = this->head;

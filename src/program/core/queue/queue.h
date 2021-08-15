@@ -20,7 +20,7 @@ typedef struct
 
 bool queueIsEmpty(Queue this);
 Node *nodeCreate(void *data);
-Queue queueEnqueue(Queue this, void *data);
+void queueEnqueue(Queue *this, void *data);
 void *queueDequeue(Queue *this);
 void queueDestroy(Queue *this);
 
