@@ -25,6 +25,8 @@
 #undef ARRAY_REALLOC
 #endif
 
+#define DEMO_MODE
+
 #define __UNIVERSAL_ARRAY_IMPLEMENTATION__
 #include "core/array/array.h"
 
@@ -108,21 +110,18 @@ void programMainLoop(Program this)
         this.deltaTime = glfwGetTime() - lastUpdate;
         lastUpdate = glfwGetTime();
 
-        if (demoMode)
-        {
+        #ifdef DEMO_MODE
             processDemoMode(&this);
-        }
-        else
-        {
+        #else
             processInput(&this);
-        }
+        #endif
 
         enqueueTasks(&this);
         waitForTasksToFinish();
         drawSlicesIntoTexture(&this);
 
         printFPS(this.graphics, getDeltaTime());
-        graphicsSwapBuffers(this.graphics);
+        graphicsRender(this.graphics);
         glfwPollEvents();
         this.lastCameraPosition = this.cameraPosition;
         this.lastAngle = this.lookingAngle;

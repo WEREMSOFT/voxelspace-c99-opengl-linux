@@ -17,7 +17,7 @@ typedef struct
 } Graphics;
 
 Graphics graphicsCreate(int width, int height);
-void graphicsSwapBuffers(Graphics this);
+void graphicsRender(Graphics this);
 void graphicsDestroy(Graphics this);
 void graphicsUpdateMouseCoordinates(Graphics *this);
 #endif

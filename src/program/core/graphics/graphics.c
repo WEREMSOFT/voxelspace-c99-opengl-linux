@@ -144,7 +144,7 @@ Graphics graphicsCreate(int width, int height)
     return this;
 }
 
-void graphicsSwapBuffers(Graphics this)
+void graphicsRender(Graphics this)
 {
     // Update texture
     glBindTexture(GL_TEXTURE_2D, this.textureId);
