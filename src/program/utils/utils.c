@@ -1,13 +1,5 @@
 #include "utils.h"
 
-static inline PointF positionUpdateIntoCircularMovenent()
-{
-    PointF this = {0};
-    this.x = sinf(glfwGetTime()) * 40.f - 40;
-    this.y = cosf(glfwGetTime()) * 40.f - 40;
-    return this;
-}
-
 void printFPS(Graphics this, double deltaTime)
 {
 #define FPS_HISTORY 10

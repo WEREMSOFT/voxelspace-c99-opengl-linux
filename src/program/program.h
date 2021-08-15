@@ -16,7 +16,20 @@ enum EnumMapTYpe
     MAP_COUNT
 };
 
+struct Program;
+
 typedef struct
+{
+    pthread_t handler;
+    int startColumn;
+    int endColumn;
+    ImageData imageData;
+    struct Program *program;
+} PthreadInfo;
+
+#define PTHREAD_COUNT 8
+
+typedef struct Program
 {
     Graphics graphics;
     Sprite colorMaps[MAP_COUNT];
@@ -32,16 +45,12 @@ typedef struct
     int horizon;
     PointF scale;
     unsigned int mapIndex;
+    double stopwatchStart;
+    double deltaTime;
+    PointI lastCameraPosition;
+    double lastAngle;
+    PthreadInfo pthreads[PTHREAD_COUNT];
 } Program;
-
-typedef struct
-{
-    pthread_t handler;
-    int startColumn;
-    int endColumn;
-    ImageData imageData;
-    Program program;
-} PthreadInfo;
 
 Program programCreate();
 void programMainLoop(Program this);

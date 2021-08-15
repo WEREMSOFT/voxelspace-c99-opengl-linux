@@ -146,9 +146,6 @@ Graphics graphicsCreate(int width, int height)
 
 void graphicsSwapBuffers(Graphics this)
 {
-    // glClearColor(0, 0, 0, 1.0);
-    // glClear(GL_COLOR_BUFFER_BIT);
-
     // Update texture
     glBindTexture(GL_TEXTURE_2D, this.textureId);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, this.imageData.size.x, this.imageData.size.y, GL_RGB, GL_UNSIGNED_BYTE, this.imageData.data);
@@ -157,7 +154,6 @@ void graphicsSwapBuffers(Graphics this)
     glBindVertexArray(this.VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-    // glfwSwapBuffers(this.window);
     glFlush();
 }
 

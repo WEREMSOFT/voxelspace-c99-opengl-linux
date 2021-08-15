@@ -12,7 +12,6 @@
 #include "utils/utils.h"
 #include "vec3/vec3.h"
 
-#define PTHREAD_COUNT 8
 #define MODULE 1048576
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
@@ -41,6 +40,13 @@ int refCounter = 0;
 Queue taskQ = {0};
 
 void *imRenderVoxelSpaceSlice();
+static inline void processDemoMode(Program *this);
+static inline void processInput(Program *this);
+static inline void initThreads(Program *this);
+static inline void initThreadInfo(Program *this);
+static inline void enqueueTasks(Program *this);
+static inline void waitForTasksToFinish(void);
+static inline void drawSlicesIntoTexture(Program *this);
 
 Program programCreate()
 {
@@ -74,6 +80,8 @@ Program programCreate()
         this.colorMaps[i] = spriteCreate(colorMapNames[i]);
     }
 
+    this.stopwatchStart = glfwGetTime();
+
     this.height = 200;
     this.horizon = 50;
     this.scale.y = 400;
@@ -86,134 +94,38 @@ Program programCreate()
 
 void programMainLoop(Program this)
 {
-    PthreadInfo pthreads[PTHREAD_COUNT] = {0};
-
-    for (int i = 0; i < PTHREAD_COUNT; i++)
-    {
-        pthreads[i].program = this;
-        pthread_create(&pthreads[i].handler, NULL, imRenderVoxelSpaceSlice, NULL);
-    }
-
-    for (int i = 0; i < PTHREAD_COUNT; i++)
-    {
-        pthreads[i].imageData.bufferSize = this.graphics.imageData.bufferSize / PTHREAD_COUNT;
-        pthreads[i].imageData.data = (Color *)malloc(pthreads[i].imageData.bufferSize);
-        pthreads[i].imageData.size.x = this.graphics.imageData.size.x / PTHREAD_COUNT;
-        pthreads[i].imageData.size.y = this.graphics.imageData.size.y;
-        pthreads[i].startColumn = i * pthreads[i].imageData.size.x;
-        pthreads[i].endColumn = pthreads[i].startColumn + pthreads[i].imageData.size.y;
-    }
-
     double lastUpdate = 0;
     bool demoMode = true;
 
-    PointI lastCameraPosition = this.cameraPosition;
-    double lastAngle = this.lookingAngle;
-    double stopwatchStart = glfwGetTime();
+    initThreads(&this);
+    initThreadInfo(&this);
+
+    this.lastCameraPosition = this.cameraPosition;
+    this.lastAngle = this.lookingAngle;
 
     while (glfwGetKey(this.graphics.window, GLFW_KEY_ESCAPE) != GLFW_PRESS)
     {
-        double deltaTime = glfwGetTime() - lastUpdate;
+        this.deltaTime = glfwGetTime() - lastUpdate;
         lastUpdate = glfwGetTime();
 
         if (demoMode)
         {
-            this.cameraPosition.y += this.cameraSpeed * deltaTime;
-            this.cameraPosition.x += this.cameraSpeed * deltaTime;
-            this.lookingAngle -= this.angularSpeed * deltaTime;
-            if (glfwGetTime() - stopwatchStart > 3.0)
-            {
-                this.mapIndex += 1;
-                this.mapIndex %= MAP_COUNT;
-                stopwatchStart = glfwGetTime();
-            }
+            processDemoMode(&this);
         }
         else
         {
-            if (glfwGetKey(this.graphics.window, GLFW_KEY_F1) == GLFW_PRESS)
-                this.scale.x = this.scale.y += 10;
-            else if (glfwGetKey(this.graphics.window, GLFW_KEY_F2) == GLFW_PRESS)
-                this.scale.x = this.scale.y -= 10;
-
-            if (glfwGetKey(this.graphics.window, GLFW_KEY_F3) == GLFW_PRESS)
-                this.distance += 100;
-            else if (glfwGetKey(this.graphics.window, GLFW_KEY_F4) == GLFW_PRESS)
-                this.distance -= 100;
-
-            if (glfwGetKey(this.graphics.window, GLFW_KEY_LEFT) == GLFW_PRESS)
-                this.cameraPosition.x += this.cameraSpeed * deltaTime;
-            else if (glfwGetKey(this.graphics.window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-                this.cameraPosition.x -= this.cameraSpeed * deltaTime;
-
-            if (glfwGetKey(this.graphics.window, GLFW_KEY_UP) == GLFW_PRESS)
-                this.cameraPosition.y -= this.cameraSpeed * deltaTime;
-            else if (glfwGetKey(this.graphics.window, GLFW_KEY_DOWN) == GLFW_PRESS)
-                this.cameraPosition.y += this.cameraSpeed * deltaTime;
-
-            if (glfwGetKey(this.graphics.window, GLFW_KEY_I) == GLFW_PRESS)
-                this.height += this.cameraSpeed * deltaTime;
-            else if (glfwGetKey(this.graphics.window, GLFW_KEY_O) == GLFW_PRESS)
-                this.height -= this.cameraSpeed * deltaTime;
-
-            if (glfwGetKey(this.graphics.window, GLFW_KEY_A) == GLFW_PRESS)
-                this.lookingAngle += this.angularSpeed * deltaTime;
-            else if (glfwGetKey(this.graphics.window, GLFW_KEY_D) == GLFW_PRESS)
-                this.lookingAngle -= this.angularSpeed * deltaTime;
-
-            if (this.cameraPosition.x - lastCameraPosition.x + this.cameraPosition.y - lastCameraPosition.y + this.lookingAngle - lastAngle != 0)
-            {
-                this.levelOfDetail = 0.05;
-            }
-            else
-            {
-                this.levelOfDetail = 0.01;
-            }
+            processInput(&this);
         }
 
-        if (isKeyJustPressed(this.graphics.window, GLFW_KEY_K))
-        {
-            this.mapIndex++;
-            this.mapIndex %= MAP_COUNT;
-        }
-
-        if (isKeyJustPressed(this.graphics.window, GLFW_KEY_L))
-        {
-            this.mapIndex--;
-            this.mapIndex %= MAP_COUNT;
-        }
-
-        pthread_mutex_lock(&mutexMain);
-        for (int i = 0; i < PTHREAD_COUNT; i++)
-        {
-            pthreads[i].program = this;
-            queueEnqueue(&taskQ, &pthreads[i]);
-            pthread_cond_signal(&condVar);
-        }
-        pthread_mutex_unlock(&mutexMain);
-
-        Sprite tempSprite = {0};
-
-        int tempRefCounter = PTHREAD_COUNT;
-        while (tempRefCounter > 0)
-        {
-            pthread_mutex_lock(&referenceCounterLock);
-            tempRefCounter = refCounter;
-            pthread_mutex_unlock(&referenceCounterLock);
-        };
-
-        refCounter = PTHREAD_COUNT;
-        for (int i = 0; i < PTHREAD_COUNT; i++)
-        {
-            tempSprite.position.x = pthreads[i].startColumn;
-            tempSprite.imageData = pthreads[i].imageData;
-            spriteDraw(tempSprite, this.graphics.imageData);
-        }
+        enqueueTasks(&this);
+        waitForTasksToFinish();
+        drawSlicesIntoTexture(&this);
 
         printFPS(this.graphics, getDeltaTime());
         graphicsSwapBuffers(this.graphics);
         glfwPollEvents();
-        lastCameraPosition = this.cameraPosition;
-        lastAngle = this.lookingAngle;
+        this.lastCameraPosition = this.cameraPosition;
+        this.lastAngle = this.lookingAngle;
     }
 }
 
@@ -252,7 +164,7 @@ void *imRenderVoxelSpaceSlice()
         if (this != NULL)
         {
             PthreadInfo that = *this;
-            double angle = that.program.lookingAngle;
+            double angle = that.program->lookingAngle;
 
             PointF pLeft = {0};
             PointF pRight = {0};
@@ -267,19 +179,19 @@ void *imRenderVoxelSpaceSlice()
 
             for (int i = 0; i < that.imageData.size.x; i++)
             {
-                maxHeight[i] = that.program.graphics.imageData.size.y - 1;
+                maxHeight[i] = that.program->graphics.imageData.size.y - 1;
             }
 
             double z = 1.0;
             imClear(that.imageData);
-            while (z < that.program.distance)
+            while (z < that.program->distance)
             {
 
-                pLeft = (PointF){(-cosphi - sinphi) * z + that.program.cameraPosition.x, (sinphi - cosphi) * z + that.program.cameraPosition.y};
-                pRight = (PointF){(cosphi - sinphi) * z + that.program.cameraPosition.x, (-sinphi - cosphi) * z + that.program.cameraPosition.y};
+                pLeft = (PointF){(-cosphi - sinphi) * z + that.program->cameraPosition.x, (sinphi - cosphi) * z + that.program->cameraPosition.y};
+                pRight = (PointF){(cosphi - sinphi) * z + that.program->cameraPosition.x, (-sinphi - cosphi) * z + that.program->cameraPosition.y};
 
-                double dx = (pRight.x - pLeft.x) / that.program.graphics.imageData.size.x + (that.startColumn / that.program.graphics.imageData.size.x);
-                double dy = (pRight.y - pLeft.y) / that.program.graphics.imageData.size.y;
+                double dx = (pRight.x - pLeft.x) / that.program->graphics.imageData.size.x + (that.startColumn / that.program->graphics.imageData.size.x);
+                double dy = (pRight.y - pLeft.y) / that.program->graphics.imageData.size.y;
 
                 pLeft.x += dx * that.startColumn;
                 pLeft.y += dy * that.startColumn;
@@ -288,21 +200,21 @@ void *imRenderVoxelSpaceSlice()
                 {
                     PointU mappedPoint = pointFToPointU(pLeft);
 
-                    unsigned int position = (mappedPoint.x + mappedPoint.y * that.program.colorMaps[that.program.mapIndex].imageData.size.x);
+                    unsigned int position = (mappedPoint.x + mappedPoint.y * that.program->colorMaps[that.program->mapIndex].imageData.size.x);
 
                     position %= MODULE;
-                    Color colorMapColor = that.program.colorMaps[that.program.mapIndex].imageData.data[position];
+                    Color colorMapColor = that.program->colorMaps[that.program->mapIndex].imageData.data[position];
 
-                    double colorRatio = (that.program.distance - z) / that.program.distance;
+                    double colorRatio = (that.program->distance - z) / that.program->distance;
 
                     colorMapColor.r *= colorRatio;
                     colorMapColor.g *= colorRatio;
                     colorMapColor.b *= colorRatio;
 
-                    position = (mappedPoint.x + mappedPoint.y * that.program.heightMaps[that.program.mapIndex].imageData.size.x);
-                    position %= that.program.heightMaps[that.program.mapIndex].imageData.bufferSize;
-                    char heightMapColor = ((char *)that.program.heightMaps[that.program.mapIndex].imageData.data)[position];
-                    int heightOnScreen = (that.program.height - heightMapColor) / (float)z * that.program.scale.y + that.program.horizon;
+                    position = (mappedPoint.x + mappedPoint.y * that.program->heightMaps[that.program->mapIndex].imageData.size.x);
+                    position %= that.program->heightMaps[that.program->mapIndex].imageData.bufferSize;
+                    char heightMapColor = ((char *)that.program->heightMaps[that.program->mapIndex].imageData.data)[position];
+                    int heightOnScreen = (that.program->height - heightMapColor) / (float)z * that.program->scale.y + that.program->horizon;
 
                     heightOnScreen = MIN(MAX(heightOnScreen, 0), that.imageData.size.y);
                     drawVerticalLine(that.imageData, (PointI){i, heightOnScreen}, colorMapColor, maxHeight[i]);
@@ -311,7 +223,7 @@ void *imRenderVoxelSpaceSlice()
                     maxHeight[i] = MIN(heightOnScreen, maxHeight[i]);
                 }
                 z += dz;
-                dz += that.program.levelOfDetail;
+                dz += that.program->levelOfDetail;
             }
             pthread_mutex_lock(&referenceCounterLock);
             refCounter--;
@@ -319,4 +231,130 @@ void *imRenderVoxelSpaceSlice()
         }
     }
     return NULL;
+}
+
+static inline void processDemoMode(Program *this)
+{
+    this->cameraPosition.y += this->cameraSpeed * this->deltaTime;
+    this->cameraPosition.x += this->cameraSpeed * this->deltaTime;
+    this->lookingAngle -= this->angularSpeed * this->deltaTime;
+    if (glfwGetTime() - this->stopwatchStart > 3.0)
+    {
+        this->mapIndex += 1;
+        this->mapIndex %= MAP_COUNT;
+        this->stopwatchStart = glfwGetTime();
+    }
+}
+
+static inline void processInput(Program *this)
+{
+    if (glfwGetKey(this->graphics.window, GLFW_KEY_F1) == GLFW_PRESS)
+        this->scale.x = this->scale.y += 10;
+    else if (glfwGetKey(this->graphics.window, GLFW_KEY_F2) == GLFW_PRESS)
+        this->scale.x = this->scale.y -= 10;
+
+    if (glfwGetKey(this->graphics.window, GLFW_KEY_F3) == GLFW_PRESS)
+        this->distance += 100;
+    else if (glfwGetKey(this->graphics.window, GLFW_KEY_F4) == GLFW_PRESS)
+        this->distance -= 100;
+
+    if (glfwGetKey(this->graphics.window, GLFW_KEY_LEFT) == GLFW_PRESS)
+        this->cameraPosition.x += this->cameraSpeed * this->deltaTime;
+    else if (glfwGetKey(this->graphics.window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+        this->cameraPosition.x -= this->cameraSpeed * this->deltaTime;
+
+    if (glfwGetKey(this->graphics.window, GLFW_KEY_UP) == GLFW_PRESS)
+        this->cameraPosition.y -= this->cameraSpeed * this->deltaTime;
+    else if (glfwGetKey(this->graphics.window, GLFW_KEY_DOWN) == GLFW_PRESS)
+        this->cameraPosition.y += this->cameraSpeed * this->deltaTime;
+
+    if (glfwGetKey(this->graphics.window, GLFW_KEY_I) == GLFW_PRESS)
+        this->height += this->cameraSpeed * this->deltaTime;
+    else if (glfwGetKey(this->graphics.window, GLFW_KEY_O) == GLFW_PRESS)
+        this->height -= this->cameraSpeed * this->deltaTime;
+
+    if (glfwGetKey(this->graphics.window, GLFW_KEY_A) == GLFW_PRESS)
+        this->lookingAngle += this->angularSpeed * this->deltaTime;
+    else if (glfwGetKey(this->graphics.window, GLFW_KEY_D) == GLFW_PRESS)
+        this->lookingAngle -= this->angularSpeed * this->deltaTime;
+
+    if (this->cameraPosition.x - this->lastCameraPosition.x + this->cameraPosition.y - this->lastCameraPosition.y + this->lookingAngle - this->lastAngle != 0)
+    {
+        this->levelOfDetail = 0.05;
+    }
+    else
+    {
+        this->levelOfDetail = 0.01;
+    }
+
+    if (isKeyJustPressed(this->graphics.window, GLFW_KEY_K))
+    {
+        this->mapIndex++;
+        this->mapIndex %= MAP_COUNT;
+    }
+
+    if (isKeyJustPressed(this->graphics.window, GLFW_KEY_L))
+    {
+        this->mapIndex--;
+        this->mapIndex %= MAP_COUNT;
+    }
+}
+
+static inline void initThreads(Program *this)
+{
+    for (int i = 0; i < PTHREAD_COUNT; i++)
+    {
+        this->pthreads[i].program = this;
+        pthread_create(&this->pthreads[i].handler, NULL, imRenderVoxelSpaceSlice, NULL);
+    }
+}
+
+static inline void initThreadInfo(Program *this)
+{
+    for (int i = 0; i < PTHREAD_COUNT; i++)
+    {
+        this->pthreads[i].program = this;
+        this->pthreads[i].imageData.bufferSize = this->graphics.imageData.bufferSize / PTHREAD_COUNT;
+        this->pthreads[i].imageData.data = (Color *)malloc(this->pthreads[i].imageData.bufferSize);
+        this->pthreads[i].imageData.size.x = this->graphics.imageData.size.x / PTHREAD_COUNT;
+        this->pthreads[i].imageData.size.y = this->graphics.imageData.size.y;
+        this->pthreads[i].startColumn = i * this->pthreads[i].imageData.size.x;
+        this->pthreads[i].endColumn = this->pthreads[i].startColumn + this->pthreads[i].imageData.size.y;
+    }
+}
+
+static inline void enqueueTasks(Program *this)
+{
+    pthread_mutex_lock(&mutexMain);
+    {
+        for (int i = 0; i < PTHREAD_COUNT; i++)
+        {
+            queueEnqueue(&taskQ, &this->pthreads[i]);
+            pthread_cond_signal(&condVar);
+        }
+    }
+    pthread_mutex_unlock(&mutexMain);
+}
+
+inline static void waitForTasksToFinish(void)
+{
+    int tempRefCounter = PTHREAD_COUNT;
+    while (tempRefCounter > 0)
+    {
+        pthread_mutex_lock(&referenceCounterLock);
+        tempRefCounter = refCounter;
+        pthread_mutex_unlock(&referenceCounterLock);
+    };
+    refCounter = PTHREAD_COUNT;
+}
+
+inline static void drawSlicesIntoTexture(Program *this)
+{
+    Sprite tempSprite = {0};
+    for (int i = 0; i < PTHREAD_COUNT; i++)
+    {
+        tempSprite.position.x = this->pthreads[i].startColumn;
+        tempSprite.imageData = this->pthreads[i].imageData;
+        spriteDraw(tempSprite, this->graphics.imageData);
+    }
 }

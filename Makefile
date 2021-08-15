@@ -16,7 +16,7 @@ TARGET := bin/main.bin
 all: $(SRC_O) $(SRC_CPP_O) copy_assets
 	clang $(FLAGS_DEBUG) $(FLAGS) $(SRC_O) $(SRC_CPP_O) -o $(TARGET) $(LIBS)
 
-run_main: all
+run_main: clean all
 	$(TARGET)
 
 %.o: %.c
